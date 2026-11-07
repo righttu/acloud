@@ -6,12 +6,12 @@
 
 ## 三个组件
 
-| 组件 | 地址 | 做什么 | 手册章节 | 部署 |
-|---|---|---|---|---|
-| acloud-mcp-s | acloud-mcp-s.righttu.uk | 远帆工单系统和 MCP 服务器，数据存在 D1 | 第 4、11 章 | [![部署到 Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/righttu/acloud/tree/main/acloud-mcp-s) |
-| acloud-agent | acloud-agent.righttu.uk | 客服 Agent 和演示界面：动态代码执行、断点续做、模型切换、周报发布、定时任务、Code Mode、人工批准 | 第 1、3、5–11 章 | [![部署到 Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/righttu/acloud/tree/main/acloud-agent) |
-| acloud-sandbox（可选） | acloud-sandbox.righttu.uk | 容器沙箱，用 Python 复核统计结果，演示目录备份和恢复 | 第 5、6、9 章 | [![部署到 Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/righttu/acloud/tree/main/acloud-sandbox) |
-| acloud-mcp-p（控制台配置） | acloud-mcp-p.righttu.uk | MCP 门户，把 acloud-mcp-s 接入 Zero Trust | 第 4、11 章 | 手动配置，见下文 |
+| 组件 | 地址 | 做什么 | 部署 |
+|---|---|---|---|
+| acloud-mcp-s | acloud-mcp-s.righttu.uk | 远帆工单系统和 MCP 服务器，数据存在 D1 | [![部署到 Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/righttu/acloud/tree/main/acloud-mcp-s) |
+| acloud-agent | acloud-agent.righttu.uk | 客服 Agent 和演示界面：动态代码执行、断点续做、模型切换、周报发布、定时任务、Code Mode、人工批准 | [![部署到 Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/righttu/acloud/tree/main/acloud-agent) |
+| acloud-sandbox（可选） | acloud-sandbox.righttu.uk | 容器沙箱，用 Python 复核统计结果，演示目录备份和恢复 | [![部署到 Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/righttu/acloud/tree/main/acloud-sandbox) |
+| acloud-mcp-p（控制台配置） | acloud-mcp-p.righttu.uk | MCP 门户，把 acloud-mcp-s 接入 Zero Trust | 手动配置，见下文 |
 
 一个仓库里的多个 Worker 不会一起部署，所以每个组件有自己的按钮。
 
@@ -35,21 +35,23 @@
 
 ## 演示主线
 
-以下步骤都在 acloud-agent 界面里完成，每一步对应手册的一章。
+以下步骤都在 acloud-agent 界面里完成。界面上的演示按钮与下表一一对应，点按钮会填好提问，再点发送。
 
-| 顺序 | 你在界面上做什么 | 看什么 | 手册 |
-|---|---|---|---|
-| 1 | 问「1024 号工单怎么回事」 | Agent 通过 MCP 查到晨光制造的登录失败工单 | 第 4 章 |
-| 2 | 让 Agent 分析第 45 周全部工单 | Agent 写一段分析代码，在无网络的隔离环境里运行，只把结论交回模型 | 第 5 章 |
-| 3 | 点「模拟中断」后刷新页面 | 任务从记录接着做，已完成的步骤不重做 | 第 6 章 |
-| 4 | 切换模型 | 同一任务换模型运行，调用记录出现在 AI Gateway | 第 7 章 |
-| 5 | 发布周报 | 周报保存到 R2，Agent 用浏览器打开并截图自检 | 第 8 章 |
-| 6 | 查看报告历史 | 每周一 9:00（北京时间）自动生成的周报会出现在历史里，不需要手动操作 | 第 9 章 |
-| 7 | 用 Code Mode 做同样的查询 | 一次执行完成多步查询，界面显示 token 用量对比 | 第 10 章 |
-| 8 | 批准一份回复草稿 | 人工批准后才调用写入工具，回复标记为模拟发送 | 第 11 章 |
-| 9 | 用 Python 复核（可选） | 沙箱得出与第 2 步相同的数字 | 5.5 节 |
+| 演示项 | 你在界面上做什么 | 看什么 |
+|---|---|---|
+| 1 查一张工单 | 问「1024 号工单怎么回事」 | Agent 通过 MCP 查到晨光制造的登录失败工单，访问令牌始终不进入模型 |
+| 2 分析整周工单 | 让 Agent 分析第 45 周全部工单 | Agent 写一段分析代码，在无网络的隔离环境里运行，只把结论交回模型 |
+| 3 用 Python 复核（可选） | 让 Agent 用 Python 再算一遍 | 容器沙箱得出与上一项相同的数字 |
+| 4 断了接着做 | 点「模拟中断」后刷新页面 | 任务从记录接着做，已完成的步骤不重做 |
+| 5 换模型、按技能写 | 切换模型后让 Agent 按技能规范解释发现 | 同一任务换模型运行，写法遵循技能文件 |
+| 6 发布周报并自检 | 发布周报 | 周报保存到 R2，Agent 用浏览器打开并截图自检 |
+| 7 每周自动生成 | 查看报告历史 | 每周一 9:00（北京时间）自动生成的周报出现在历史里，不需要手动操作 |
+| 8 一次查完（Code Mode） | 用 Code Mode 做多步查询 | 一次执行完成多步查询，界面显示 token 用量对比 |
+| 9 批准后回复 | 批准一份回复草稿 | 人工批准后才调用写入工具，回复标记为模拟发送；AI Gateway 里能看到每次模型调用 |
 
-数据里预埋了三个发现，第 2 步应全部找到：
+附加演示（可选）：在 acloud-sandbox.righttu.uk 依次点「分析」「备份工作目录」「销毁并从备份恢复」，说明容器是临时的，结果要存到容器外面。
+
+数据里预埋了三个发现，「分析整周工单」应全部找到：
 
 1. 周二 22:00 发布 v3.8.0 后，「登录失败」工单从周三起明显增多（周一至周日 2、2、12、11、9、6、5 条）。这只是时间上的重合，是否由发布引起还需要查证。
 2. 恰好 3 张 VIP 工单超时未回复：1024 晨光制造、1074 海川零售、1091 北辰金融。
