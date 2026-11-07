@@ -1,2 +1,5 @@
 ACLOUD_MCP_TOKEN=""
 ACLOUD_SANDBOX_TOKEN=""
+# 可选：Cloudflare Access 服务令牌。浏览器自检打开周报时带上它，才能通过 Access。
+ACCESS_CLIENT_ID=""
+ACCESS_CLIENT_SECRET=""

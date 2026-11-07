@@ -1,13 +1,237 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>远帆软件 · 客服 Agent</title><style>body{font:16px system-ui;background:#f3f6fa;color:#182b45;max-width:1200px;margin:32px auto;padding:16px}header,section{background:white;padding:24px;border-radius:14px;margin-bottom:16px}button,select,input,textarea{font:inherit;padding:10px;margin:5px;border:1px solid #c6d1df;border-radius:6px}button{cursor:pointer;background:#e9f2ff;color:#124990}textarea{width:90%;min-height:80px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f8fc;padding:12px}main{display:grid;grid-template-columns:2fr 1fr;gap:16px}@media(max-width:800px){main{display:block}}.note{color:#697a90}.msg{border-left:4px solid #c6d1df;padding:8px 12px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.msg.user{border-color:#1258b5;background:#f2f7ff}.msg.assistant{border-color:#2e8b57}.msg.tool{border-color:#b98500;background:#fffaf0;font-size:14px}.role{font-size:13px;color:#697a90;margin-bottom:4px}a{color:#1258b5}</style><header><h1>远帆软件 · 客服 Agent</h1><p>从一张工单到每周报告，观察工具、执行环境与人工批准的边界。</p><p class="note">演示数据：2026 年第 45 周。请勿输入真实客户数据。此演示没有账号登录，部署前请用 Cloudflare Access 保护。</p><span id="notice">连接中</span></header><section><h2>演示主线</h2><div id="guide"></div><button id="interrupt">模拟中断</button><button id="refresh">恢复 / 刷新记录</button><p class="note">模拟中断会真正重启会话对象；等待约 30 秒后刷新，由 Pi 从 SQLite 检查点继续。</p></section><main><div><section><h2>对话</h2><select id="model"><option value="@cf/zai-org/glm-4.7-flash">GLM-4.7-Flash（默认）</option><option value="@cf/meta/llama-3.3-70b-instruct-fp8-fast">Llama 3.3 70B</option></select><label><input type="checkbox" id="codeMode">Code Mode（实验性）</label><textarea id="prompt" placeholder="1024 号工单怎么回事"></textarea><button id="send">发送</button><p id="status"></p><div id="chat"></div><details><summary>原始会话与模型返回的 usage（非估算）</summary><pre id="raw"></pre></details><h3>Token 对比</h3><p>同一提示词分别关闭 / 开启 Code Mode 执行，记录实际 usage。累计用量含会话历史，不是严格基准。</p><pre id="usage"></pre></section><section><h2>本地草稿 · 人工批准</h2><p>草稿只存此会话，不会自动发送。批准人由演示者填写；不是经过身份验证的账号。</p><input id="approver" placeholder="批准人姓名"><div id="drafts"></div></section></div><aside><section><h2>工具调用与生成代码</h2><pre id="events"></pre></section><section><h2>周报历史</h2><p>每周一上海时间 09:00 自动生成。固定演示第45周数据。</p><div id="reports"></div></section></aside></main><script>
-let sid=localStorage.getItem('acloud-session');if(!sid){sid=crypto.randomUUID();localStorage.setItem('acloud-session',sid)}const $=x=>document.getElementById(x);const endpoint='/api/session/'+sid;let lastMode=false;
-const prompts=[['1 查一张工单','1024 号工单怎么回事'],['2 分析整周工单','分析2026-W45全部工单，写JavaScript在run_analysis里统计总量、逐日登录失败、VIP超时和星河物流重复投诉，再写周报。不要把时间重合说成因果。'],['3 用 Python 复核（可选）','用Python复核2026-W45工单分析，沙箱不可用则说明。'],['4 断了接着做','继续尚未完成的周报，复用已经完成的步骤。'],['5 换模型、按技能写','按周报和回复技能规范解释上一步发现。'],['6 发布周报并自检','把已完成的周报发布为HTML，打开自检并保存截图。'],['7 每周自动生成','说明周报内容与需要长期跟进的事项。'],['8 一次查完（Code Mode）','用code_mode一次查询1024号工单和它的客户资料，只返回必要摘要。'],['9 批准后回复','为1024号工单准备回复草稿并保存本地，等待人工批准。']];for(const [label,text]of prompts){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{$('prompt').value=text};$('guide').append(b)}
-async function post(action,p){const r=await fetch(endpoint+'/'+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p)});if(!r.ok)throw Error((await r.text())||'操作失败');return r.json()}
-$('send').onclick=async()=>{try{lastMode=$('codeMode').checked;$('status').textContent='正在提交';await post('ask',{prompt:$('prompt').value,model:$('model').value,codeMode:lastMode,operationId:crypto.randomUUID()});$('status').textContent='已持久提交，后台执行中';await load()}catch(e){$('status').textContent=e.message}};
-$('interrupt').onclick=async()=>{try{await post('interrupt',{})}catch{}$('status').textContent='已请求模拟中断，请稍候刷新'};$('refresh').onclick=load;
-function textOf(v){if(v==null)return'';if(typeof v==='string')return v;if(Array.isArray(v))return v.map(textOf).filter(Boolean).join('\n');if(typeof v==='object'){if(typeof v.text==='string')return v.text;if(v.type==='toolCall'||v.type==='tool-call'||v.type==='tool_call')return '调用工具 '+(v.name||v.toolName||'')+(v.arguments||v.args?'：'+JSON.stringify(v.arguments||v.args).slice(0,300):'');if(v.content!==undefined)return textOf(v.content);if(v.message)return textOf(v.message)}return''}
-function roleOf(e){const r=(e&&(e.role||(e.message&&e.message.role)||e.kind||e.type))||'';if(/user/i.test(r))return['user','客服'];if(/assistant|model/i.test(r))return['assistant','Agent'];if(/tool/i.test(r))return['tool','工具'];return['tool',r||'记录']}
-function renderChat(entries){const box=$('chat');box.replaceChildren();for(const e of entries){const [cls,label]=roleOf(e);const t=textOf(e);const div=document.createElement('div');div.className='msg '+cls;const r=document.createElement('div');r.className='role';r.textContent=label;div.append(r);if(t){const p=document.createElement('div');p.textContent=cls==='tool'&&t.length>600?t.slice(0,600)+' …':t;div.append(p)}const det=document.createElement('details');const sm=document.createElement('summary');sm.textContent='原始记录';const pre=document.createElement('pre');pre.textContent=JSON.stringify(e,null,2);det.append(sm,pre);div.append(det);box.append(div)}}
-function findUsage(v,out=[]){if(v&&typeof v==='object'){if(v.usage)out.push(v.usage);for(const [k,x]of Object.entries(v))if(k!=='usage')findUsage(x,out)}return out}
-async function load(){try{const r=await fetch(endpoint);if(!r.ok)throw Error('会话暂不可用');const d=await r.json();$('notice').textContent=d.notice;$('raw').textContent=JSON.stringify(d.view,null,2);renderChat(d.view&&d.view.entries||[]);$('events').textContent=d.events.map(x=>x.at+' '+x.name+'\n'+x.detail).join('\n\n');const usage=findUsage(d.view);if(usage.length){localStorage.setItem('acloud-usage-'+lastMode,JSON.stringify(usage));}$('usage').textContent='普通工具：'+(localStorage.getItem('acloud-usage-false')||'尚无实际用量')+'\nCode Mode：'+(localStorage.getItem('acloud-usage-true')||'尚无实际用量');$('drafts').replaceChildren();for(const x of d.drafts){const p=document.createElement('pre');p.textContent=JSON.stringify(x,null,2);$('drafts').append(p);if(x.status==='待批准'){const b=document.createElement('button');b.textContent='批准发送';b.onclick=async()=>{if(!confirm('确认发送此草稿？'))return;try{await post('approve',{id:x.id,approver:$('approver').value});await load()}catch(e){alert(e.message)}};$('drafts').append(b)}}const reports=await(await fetch('/api/reports')).json();$('reports').replaceChildren();for(const x of reports){const a=document.createElement('a');a.href='/reports/'+x.id;a.textContent=x.id;a.target='_blank';$('reports').append(a,document.createElement('br'))}}catch(e){$('notice').textContent=e.message}}
-load();setInterval(load,4000);
-</script></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>远帆软件 · 客服 Agent</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--line:#e6e9f0;--text:#1d2433;--muted:#667085;--accent:#f38020;--accent-soft:#fff4ea;--blue:#2563eb;--green:#12805c;--red:#c62f2f;--radius:14px}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;background:var(--bg);color:var(--text)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 14px}
+button:hover{border-color:#c9cfdb}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{filter:brightness(.95)}
+button:disabled{opacity:.5;cursor:default}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:14px 24px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#f38020,#faad3f);display:grid;place-items:center;color:#fff;font-weight:700}
+.brand h1{font-size:17px;margin:0}
+.brand p{margin:0;color:var(--muted);font-size:12px}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.controls select{border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:#fff}
+.toggle{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--muted)}
+.chip{font-size:12px;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#3448c5;white-space:nowrap}
+.chip.warn{background:#fff1f0;color:var(--red)}
+.layout{display:grid;grid-template-columns:300px minmax(0,1fr) 380px;gap:16px;padding:16px 24px;max-width:1600px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius)}
+.steps{padding:12px;align-self:start;position:sticky;top:80px;max-height:calc(100vh - 96px);overflow:auto}
+.steps h2,.panel h2{font-size:13px;color:var(--muted);font-weight:600;margin:4px 8px 10px;letter-spacing:.02em}
+.step{display:flex;gap:10px;padding:10px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.step:hover{background:#f8f9fc}
+.step.active{background:var(--accent-soft);border-color:#ffd8b5}
+.num{flex:none;width:24px;height:24px;border-radius:50%;background:#eef0f4;color:#475467;font-size:12px;font-weight:700;display:grid;place-items:center}
+.step.active .num{background:var(--accent);color:#fff}
+.step b{display:block;font-size:14px}
+.step span{display:block;font-size:12px;color:var(--muted);line-height:1.5}
+.tag{font-size:11px;color:#9a5b13;background:#fff4e5;border-radius:4px;padding:0 5px;margin-left:4px;font-weight:500}
+.center{display:flex;flex-direction:column;min-height:calc(100vh - 100px)}
+.guide{padding:14px 18px;border-bottom:1px solid var(--line);display:none}
+.guide.show{display:block}
+.guide b{font-size:15px}
+.guide p{margin:4px 0 10px;color:var(--muted);font-size:13px}
+.guide .actions{display:flex;flex-wrap:wrap;gap:8px}
+.banner{padding:10px 18px;background:#f0f6ff;color:#1e4fb8;font-size:13px;border-bottom:1px solid var(--line);display:none;align-items:center;gap:10px}
+.banner.show{display:flex}
+.chat{flex:1;padding:18px;overflow:auto}
+.empty{color:var(--muted);text-align:center;margin-top:80px}
+.msg{margin:0 0 14px;display:flex}
+.msg.user{justify-content:flex-end}
+.bubble{max-width:86%;padding:10px 14px;border-radius:14px;overflow-wrap:anywhere}
+.user .bubble{background:var(--blue);color:#fff;border-bottom-right-radius:4px;white-space:pre-wrap}
+.assistant .bubble{background:#f7f8fb;border:1px solid var(--line);border-bottom-left-radius:4px}
+.bubble h1,.bubble h2,.bubble h3,.bubble h4{font-size:15px;margin:10px 0 4px}
+.bubble p{margin:4px 0}.bubble ul{margin:4px 0;padding-left:20px}
+.bubble table{border-collapse:collapse;margin:6px 0;font-size:13px}
+.bubble th,.bubble td{border:1px solid var(--line);padding:4px 8px;text-align:left}
+.bubble th{background:#eef0f4}
+.bubble code{background:#eef0f4;padding:0 4px;border-radius:4px;font-size:13px}
+.call{display:inline-flex;align-items:center;gap:6px;margin:6px 6px 0 0;padding:3px 10px;font-size:12px;border-radius:999px;background:#fff;border:1px solid var(--line);color:#475467}
+.call::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.note{font-size:12px;color:var(--muted);text-align:center;margin:8px 0 14px}
+.note.err{color:var(--red)}
+details.result{margin:-6px 0 12px;font-size:12px;color:var(--muted)}
+details.result summary{cursor:pointer}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f7f9;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:12px;max-height:320px;overflow:auto;margin:6px 0}
+.composer{border-top:1px solid var(--line);padding:12px 14px;display:flex;gap:10px;align-items:flex-end}
+.composer textarea{flex:1;min-height:54px;max-height:200px;resize:vertical;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.status{display:flex;align-items:center;gap:8px;padding:0 18px 10px;font-size:12px;color:var(--muted);min-height:22px}
+.spin{width:12px;height:12px;border:2px solid #ffd2a8;border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;display:none}
+.busy .spin{display:inline-block}
+@keyframes s{to{transform:rotate(360deg)}}
+.panel{align-self:start;position:sticky;top:80px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}
+.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 8px}
+.tabs button{border:0;border-radius:0;background:none;padding:12px 10px;color:var(--muted);border-bottom:2px solid transparent;font-size:14px}
+.tabs button.on{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+.tabs .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;line-height:18px}
+.pane{padding:12px 14px;overflow:auto;display:none}
+.pane.on{display:block}
+.ev{border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:8px}
+.ev-head{display:flex;align-items:center;gap:8px;font-size:13px}
+.ev-head b{font-weight:600}
+.ev-head time{margin-left:auto;color:var(--muted);font-size:11px}
+.st{font-size:11px;padding:1px 6px;border-radius:4px;background:#eef0f4;color:#475467}
+.st.ok{background:#e7f6ef;color:var(--green)}.st.bad{background:#fdecec;color:var(--red)}.st.run{background:#fff4e5;color:#9a5b13}
+.ev details{font-size:12px;margin-top:4px}.ev summary{cursor:pointer;color:var(--muted)}
+.draft{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.draft .body{white-space:pre-wrap;font-size:14px;background:#fafbfc;border-radius:8px;padding:10px;margin:8px 0}
+.draft .row{display:flex;gap:8px;flex-wrap:wrap}
+.draft input{flex:1;min-width:120px;border:1px solid var(--line);border-radius:10px;padding:7px 10px}
+.muted{color:var(--muted);font-size:13px}
+.report{display:flex;gap:12px;border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px;align-items:center}
+.report img{width:84px;height:84px;object-fit:cover;object-position:top;border-radius:8px;border:1px solid var(--line);background:#f6f7f9}
+.report a{color:var(--blue);text-decoration:none;font-weight:600;word-break:break-all}
+.cmp{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+.cmp th,.cmp td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.cmp th{background:#f8f9fc}
+.msgline{font-size:13px;margin-top:6px}
+.msgline.ok{color:var(--green)}.msgline.bad{color:var(--red)}
+@media(max-width:1200px){.layout{grid-template-columns:260px minmax(0,1fr)}.panel{grid-column:1/-1;position:static;max-height:none}}
+@media(max-width:760px){header{padding:12px 14px}.layout{grid-template-columns:1fr;padding:12px}.steps{position:static;max-height:none;display:flex;overflow-x:auto;gap:6px;padding:8px}.steps h2{display:none}.step{flex:none;width:200px}.center{min-height:70vh}.bubble{max-width:94%}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">远</div><div><h1>远帆软件 · 客服 Agent</h1><p>演示数据：2026 年第 45 周，虚构客户与工单</p></div></div>
+  <div class="controls">
+    <select id="model" title="模型"></select>
+    <label class="toggle"><input type="checkbox" id="codeMode">Code Mode<span class="tag">实验性</span></label>
+    <span class="chip" id="notice">连接中</span>
+    <button id="newSession">新会话</button>
+  </div>
+</header>
+<div class="layout">
+  <nav class="card steps"><h2>演示项</h2><div id="steps"></div></nav>
+  <main class="card center">
+    <div class="banner" id="banner"><span>正在查看每周定时任务的会话（只读）。</span><button id="backMine">返回我的会话</button></div>
+    <div class="guide" id="guide"><b id="gTitle"></b><p id="gText"></p><div class="actions" id="gActions"></div></div>
+    <div class="chat" id="chat"><div class="empty">从左侧选择一个演示项开始，或直接输入问题。</div></div>
+    <div class="status" id="status"><span class="spin"></span><span id="statusText"></span></div>
+    <div class="composer"><textarea id="prompt" placeholder="输入问题，例如：1024 号工单怎么回事"></textarea><button class="primary" id="send">发送</button></div>
+  </main>
+  <aside class="card panel">
+    <div class="tabs" id="tabs">
+      <button data-p="events" class="on">工具调用</button>
+      <button data-p="drafts">草稿审批<span class="badge" id="draftBadge" hidden></span></button>
+      <button data-p="reports">周报</button>
+      <button data-p="compare">Token 对比</button>
+    </div>
+    <div class="pane on" id="p-events"><div class="muted">Agent 调用工具时，这里显示参数、生成的代码和结果。</div></div>
+    <div class="pane" id="p-drafts"><div class="muted">还没有草稿。草稿只保存在当前会话，必须由人批准才会发送。</div></div>
+    <div class="pane" id="p-reports"></div>
+    <div class="pane" id="p-compare"><p class="muted">用同一个问题分别在关闭和开启 Code Mode 的两个新会话里运行，统计模型实际返回的 token 用量。</p><div id="cmpOut"></div></div>
+  </aside>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const el=(tag,props={},...kids)=>{const e=document.createElement(tag);for(const[k,v]of Object.entries(props)){if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.startsWith('on'))e[k]=v;else e.setAttribute(k,v)}for(const c of kids)if(c!=null)e.append(c);return e};
+const uuid=()=>crypto.randomUUID();
+let mine=localStorage.getItem('acloud-session');if(!mine||!/^[\w-]{16,80}$/.test(mine)){mine=uuid();localStorage.setItem('acloud-session',mine)}
+let sid=mine,readOnly=false,lastSig='',busy=false,timer=null,models=[];
+const WEEKLY='acloud-weekly-scheduled';
+const COMPARE_PROMPT='查询 1024 号工单和它的客户资料，只返回必要摘要。';
+
+const steps=[
+ {t:'查一张工单',s:'Agent 通过 MCP 查工单，访问令牌不进入模型',p:'1024 号工单怎么回事',tip:'看右侧「工具调用」：先 catalog 读取参数说明，再用 mcp_read 调用 get_ticket。'},
+ {t:'分析整周工单',s:'模型写的代码在无网络的动态 Worker 里运行',p:'分析 2026-W45 全部工单：写 JavaScript 在 run_analysis 里统计总量、各类别数量、逐日登录失败、VIP 超时和同一客户重复投诉，然后写出周报正文（先不发布）。',tip:'右侧会显示模型写的代码和运行结果。200 张工单原文只在隔离环境里处理，不进入对话。'},
+ {t:'用 Python 复核',opt:true,s:'容器沙箱用 Python 重算，数字应一致',p:'用 python_review 复核上一步的统计，逐项对比两边的数字是否一致。',tip:'第一次运行要启动容器，约 10 秒。'},
+ {t:'断了接着做',s:'对象被中止后，从检查点自动恢复',p:'查询 1074、1091 两张工单和对应的客户资料，写一段跟进说明。',tip:'发送后几秒内点「模拟中断」。会话对象会被真正中止，约 30 秒内自动恢复，已完成的步骤不重做。',extra:'interrupt'},
+ {t:'换模型、按技能写',s:'同一会话换成 Llama 3.3，按技能规范输出',p:'按周报规范，把本会话前面的统计结论整理成三条要点，每条带上具体数字。',tip:'这一步会把顶部模型切换为 Llama 3.3 70B。技能规范是部署时打包进来的 Markdown 文件。',model:1},
+ {t:'发布周报并自检',s:'周报存到 R2，浏览器打开页面截图检查',p:'先用 run_analysis 统计 2026-W45，再按周报规范写成 Markdown，用 publish_report 发布，最后告诉我浏览器自检结果。',tip:'完成后到右侧「周报」查看页面和截图。'},
+ {t:'每周自动生成',s:'每周一 09:00（北京时间）定时生成',tip:'定时任务每周一 09:00 自动运行。下面的按钮会立即运行同一段代码，结果出现在右侧「周报」。',extra:'weekly'},
+ {t:'一次查完（Code Mode）',s:'一次执行完成多步查询，对比 token 用量',tip:'用同一个问题分别关闭、开启 Code Mode 各跑一次，比较模型实际返回的 token 用量。',extra:'compare'},
+ {t:'批准后回复',s:'人工批准后才写入工单系统',p:'为 1024 号工单写一份给客户的回复草稿，保存后等待人工批准。',tip:'草稿出现在右侧「草稿审批」。填写批准人后点「批准发送」才会调用写入工具。每次模型调用都记录在 AI Gateway 日志里。'}
+];
+let current=-1;
+function renderSteps(){const box=$('steps');box.replaceChildren();steps.forEach((s,i)=>{box.append(el('div',{class:'step'+(i===current?' active':''),onclick:()=>pick(i)},el('div',{class:'num',text:String(i+1)}),el('div',{},el('b',{},s.t,s.opt?el('span',{class:'tag',text:'可选'}):null),el('span',{text:s.s}))))})}
+function pick(i){current=i;const s=steps[i];renderSteps();if(readOnly)backMine();$('guide').classList.add('show');$('gTitle').textContent=(i+1)+'. '+s.t;$('gText').textContent=s.tip;const a=$('gActions');a.replaceChildren();
+ if(s.model!==undefined)$('model').value=models[s.model]?.id||$('model').value;
+ if(s.p){$('prompt').value=s.p;a.append(el('button',{class:'primary',text:'发送这个问题',onclick:send}))}
+ if(s.extra==='interrupt')a.append(el('button',{text:'模拟中断',onclick:interrupt}));
+ if(s.extra==='weekly'){a.append(el('button',{class:'primary',text:'立即运行一次定时任务',onclick:runWeekly}),el('button',{text:'查看定时任务会话',onclick:()=>view(WEEKLY)}))}
+ if(s.extra==='compare')a.append(el('button',{class:'primary',text:'运行对比',onclick:compare}));
+ if(i===8)tab('drafts');if(i===5||i===6)tab('reports');if(i===7)tab('compare');if(i<5&&i!==-1)tab('events')}
+
+// 简单安全的 Markdown 渲染：先转义，再识别标题、列表、表格、粗体。
+function md(src){const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');let h='',list=false,table=null;const flush=()=>{if(list){h+='</ul>';list=false}if(table){h+='<table>'+table.map((r,i)=>'<tr>'+r.map(c=>i===0?'<th>'+inl(c)+'</th>':'<td>'+inl(c)+'</td>').join('')+'</tr>').join('')+'</table>';table=null}};for(const raw of String(src).replace(/\r/g,'').split('\n')){const l=raw.trim();let m;if(/^\|.*\|$/.test(l)){if(list){h+='</ul>';list=false}const cells=l.slice(1,-1).split('|').map(c=>c.trim());if(!cells.every(c=>/^:?-{2,}:?$/.test(c)))(table??=[]).push(cells);continue}if(table)flush();if(!l){flush();continue}if((m=l.match(/^(#{1,4})\s+(.*)$/))){flush();h+='<h'+m[1].length+'>'+inl(m[2])+'</h'+m[1].length+'>';continue}if(/^-{3,}$/.test(l)){flush();continue}if((m=l.match(/^(?:[-*]|\d+[.)])\s+(.*)$/))){if(!list){h+='<ul>';list=true}h+='<li>'+inl(m[1])+'</li>';continue}flush();h+='<p>'+inl(l)+'</p>'}flush();return h}
+
+async function api(path,body){const r=await fetch(path,body===undefined?{}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});const t=await r.text();if(!r.ok){let m=t;try{m=JSON.parse(t).error||t}catch{}throw Error(m||('HTTP '+r.status))}return t?JSON.parse(t):{}}
+const sessionPath=s=>'/api/session/'+s;
+function msgsOf(entries){const out=[];for(const e of entries||[])for(const m of e.model||[])out.push({kind:e.kind,m});return out}
+function isDone(d){if(d.live)return false;const ms=msgsOf(d.entries).filter(x=>x.kind!=='pi.system');if(!ms.length)return true;const last=ms[ms.length-1];return last.m.role==='assistant'&&['stop','error','length'].includes(last.m.stopReason)}
+function argsText(a){try{const p=typeof a.payload==='string'?JSON.parse(a.payload):a;if(p.name)return p.name+(p.arguments?' '+JSON.stringify(p.arguments):'');if(p.code)return '代码 '+p.code.length+' 字符';if(p.id)return p.id;if(p.ticket_id)return '工单 '+p.ticket_id;if(p.week)return p.week;return ''}catch{return ''}}
+function renderChat(d){const box=$('chat');const ms=msgsOf(d.entries);const sig=ms.length+':'+JSON.stringify(ms.at(-1)?.m?.stopReason||'')+':'+(ms.at(-1)?.m?.content?.length||0);if(sig===lastSig)return;lastSig=sig;const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<80;box.replaceChildren();if(!ms.length){box.append(el('div',{class:'empty',text:'从左侧选择一个演示项开始，或直接输入问题。'}));return}
+ for(const {kind,m} of ms){
+  if(kind==='pi.system'||m.role==='system')continue;
+  if(kind==='pi.compaction'){box.append(el('div',{class:'note',text:'对话较长，前面的历史已自动压缩成摘要'}));continue}
+  if(m.role==='user'){const t=typeof m.content==='string'?m.content:(m.content||[]).map(x=>x.text||'').join('');box.append(el('div',{class:'msg user'},el('div',{class:'bubble',text:t})));continue}
+  if(m.role==='toolResult'){const t=(m.content||[]).map(x=>x.text||'').join('');const det=el('details',{class:'result'},el('summary',{text:'工具结果 · '+(m.toolName||'')}),el('pre',{text:t.length>3000?t.slice(0,3000)+' …':t}));box.append(det);continue}
+  if(m.role==='assistant'){const parts=Array.isArray(m.content)?m.content:[];const text=parts.filter(x=>x.type==='text').map(x=>x.text).join('\n').trim();const calls=parts.filter(x=>x.type==='toolCall');
+   if(text||calls.length){const b=el('div',{class:'bubble'});if(text){const div=el('div');div.innerHTML=md(text);b.append(div)}for(const c of calls)b.append(el('span',{class:'call',text:'调用 '+c.name+' '+argsText(c.arguments||{})}));box.append(el('div',{class:'msg assistant'},b))}
+   if(m.stopReason==='aborted')box.append(el('div',{class:'note',text:'这一轮被中断，Agent 会从检查点继续'}));
+   if(m.stopReason==='error')box.append(el('div',{class:'note err',text:'模型调用出错：'+(m.errorMessage||'未知错误').slice(0,300)}));
+  }
+ }
+ if(atBottom||busy)box.scrollTop=box.scrollHeight}
+function fmtTime(s){try{return new Date(s).toLocaleTimeString('zh-CN',{hour12:false})}catch{return ''}}
+function renderEvents(evts){const box=$('p-events');box.replaceChildren();if(!evts.length){box.append(el('div',{class:'muted',text:'Agent 调用工具时，这里显示参数、生成的代码和结果。'}));return}
+ const done=new Map();for(const e of evts.slice().reverse()){let d={};try{d=JSON.parse(e.detail)}catch{}e.d=d}
+ for(const e of evts){const d=e.d||{};const st=d.status==='完成'?['ok','完成']:d.status==='失败'?['bad','失败']:d.status==='开始'?['run','开始']:['','记录'];
+  const card=el('div',{class:'ev'},el('div',{class:'ev-head'},el('b',{text:e.name}),el('span',{class:'st '+st[0],text:st[1]+(d.ms?' · '+d.ms+' ms':'')}),el('time',{text:fmtTime(e.at)})));
+  if(d.input?.code)card.append(el('details',{open:''},el('summary',{text:'模型写的代码'}),el('pre',{text:d.input.code})));
+  else if(d.input&&Object.keys(d.input).length)card.append(el('div',{class:'muted',text:JSON.stringify(d.input).slice(0,200)}));
+  if(d.error)card.append(el('div',{class:'msgline bad',text:d.error}));
+  if(d.notice)card.append(el('div',{class:'muted',text:d.notice}));
+  if(d.result!==undefined){const t=JSON.stringify(d.result,null,2);card.append(el('details',{},el('summary',{text:'结果'}),el('pre',{text:t.length>4000?t.slice(0,4000)+' …':t})))}
+  box.append(card)}}
+function renderDrafts(drafts){const box=$('p-drafts');box.replaceChildren();const pending=drafts.filter(x=>x.status==='待批准').length;$('draftBadge').hidden=!pending;$('draftBadge').textContent=pending;
+ if(!drafts.length){box.append(el('div',{class:'muted',text:'还没有草稿。草稿只保存在当前会话，必须由人批准才会发送。'}));return}
+ for(const x of drafts.slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))){const line=el('div',{class:'msgline'});const card=el('div',{class:'draft'},el('div',{class:'ev-head'},el('b',{text:'工单 '+x.ticket_id}),el('span',{class:'st '+(x.status==='待批准'?'run':'ok'),text:x.status})),el('div',{class:'body',text:x.body}));
+  if(x.status==='待批准'&&!readOnly){const who=el('input',{placeholder:'批准人姓名'});const btn=el('button',{class:'primary',text:'批准发送'});btn.onclick=async()=>{if(!who.value.trim()){line.className='msgline bad';line.textContent='请先填写批准人';return}btn.disabled=true;try{await api(sessionPath(sid)+'/approve',{id:x.id,approver:who.value.trim()});line.className='msgline ok';line.textContent='已写入工单系统（模拟发送，不发邮件）';refresh()}catch(e){btn.disabled=false;line.className='msgline bad';line.textContent=e.message}};card.append(el('div',{class:'row'},who,btn))}
+  else if(x.approver)card.append(el('div',{class:'muted',text:'批准人：'+x.approver+(x.sent_at?' · '+new Date(x.sent_at).toLocaleString('zh-CN',{hour12:false}):'')}));
+  card.append(line);box.append(card)}}
+async function renderReports(){try{const list=await api('/api/reports');const box=$('p-reports');box.replaceChildren(el('p',{class:'muted',text:'每周一 09:00（北京时间）自动生成的周报和手动发布的周报都在这里。'}));if(!list.length){box.append(el('div',{class:'muted',text:'还没有周报。'}));return}
+ for(const r of list){box.append(el('div',{class:'report'},r.screenshot?el('a',{href:'/reports/'+r.id+'.png',target:'_blank'},el('img',{src:'/reports/'+r.id+'.png',alt:'自检截图'})):el('div',{class:'muted',text:'无截图'}),el('div',{},el('a',{href:'/reports/'+r.id,target:'_blank',text:r.id}),el('div',{class:'muted',text:(r.scheduled?(r.id.includes('manual')?'定时任务 · 手动运行':'定时任务 · 自动'):'对话中发布')+' · '+new Date(r.at).toLocaleString('zh-CN',{hour12:false})}))))}}catch{}}
+function usageOf(u){let i=0,o=0,t=0;for(const v of Object.values(u?.models||{})){i+=v.input||0;o+=v.output||0;t+=v.totalTokens||0}return{i,o,t}}
+async function refresh(){clearTimeout(timer);try{const d=await api(sessionPath(sid));busy=!isDone(d);
+ $('notice').textContent=d.notice;$('notice').className='chip'+(/失败|退回/.test(d.notice)?' warn':'');
+ if(!models.length&&d.models){models=d.models;$('model').replaceChildren(...models.map(m=>el('option',{value:m.id,text:m.name})))}
+ renderChat(d);renderEvents(d.events||[]);renderDrafts(d.drafts||[]);
+ const u=usageOf(d.usage);$('status').className='status'+(busy?' busy':'');$('statusText').textContent=busy?'Agent 正在工作…':(u.t?'本会话模型用量：输入 '+u.i+' · 输出 '+u.o+' token':'');
+ $('send').disabled=readOnly}catch(e){$('statusText').textContent=e.message}
+ timer=setTimeout(refresh,busy?2500:8000)}
+async function send(){if(readOnly)return;const prompt=$('prompt').value.trim();if(!prompt)return;$('send').disabled=true;try{await api(sessionPath(sid)+'/ask',{prompt,model:$('model').value,codeMode:$('codeMode').checked,operationId:uuid()});$('prompt').value='';busy=true;$('status').className='status busy';$('statusText').textContent='已提交，Agent 正在工作…';setTimeout(refresh,800)}catch(e){$('statusText').textContent=e.message}finally{$('send').disabled=false}}
+async function interrupt(){try{await api(sessionPath(sid)+'/interrupt',{})}catch{}$('statusText').textContent='已模拟中断：会话对象被中止，约 30 秒内自动恢复。';setTimeout(refresh,3000)}
+async function runWeekly(){try{const r=await api('/api/weekly/run',{});$('statusText').textContent='定时任务已开始运行，报告 id：'+r.id+'。约 1–2 分钟后出现在右侧「周报」。';view(WEEKLY)}catch(e){$('statusText').textContent=e.message}}
+function view(s){sid=s;readOnly=s!==mine;lastSig='';$('banner').classList.toggle('show',readOnly);refresh()}
+function backMine(){view(mine)}
+function tab(name){for(const b of $('tabs').children)b.classList.toggle('on',b.dataset.p===name);for(const p of document.querySelectorAll('.pane'))p.classList.toggle('on',p.id==='p-'+name);if(name==='reports')renderReports()}
+async function compare(){tab('compare');const out=$('cmpOut');const model=$('model').value;const runs=[{label:'普通工具',cm:false,sid:'cmp-off-'+uuid()},{label:'Code Mode',cm:true,sid:'cmp-on-'+uuid()}];out.replaceChildren(el('p',{class:'muted',text:'正在两个新会话里运行同一个问题：「'+COMPARE_PROMPT+'」'}));
+ try{for(const r of runs)await api(sessionPath(r.sid)+'/ask',{prompt:COMPARE_PROMPT,model,codeMode:r.cm,operationId:uuid()})}catch(e){out.append(el('div',{class:'msgline bad',text:e.message}));return}
+ const t0=Date.now();let res;while(Date.now()-t0<180000){await new Promise(r=>setTimeout(r,3000));res=await Promise.all(runs.map(r=>api(sessionPath(r.sid)).catch(()=>null)));if(res.every(d=>d&&isDone(d)&&msgsOf(d.entries).length>1))break}
+ const table=el('table',{class:'cmp'},el('tr',{},el('th',{text:''}),...runs.map(r=>el('th',{text:r.label}))));
+ const rows=res.map(d=>{const ms=msgsOf(d?.entries);const u=usageOf(d?.usage);const calls=ms.filter(x=>x.m.role==='assistant').flatMap(x=>(x.m.content||[]).filter(c=>c.type==='toolCall').map(c=>c.name));const ans=ms.filter(x=>x.m.role==='assistant').map(x=>(x.m.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('')).filter(Boolean).at(-1)||'';return{u,turns:ms.filter(x=>x.m.role==='assistant').length,calls,ans}});
+ const add=(name,f)=>table.append(el('tr',{},el('th',{text:name}),...rows.map(r=>el('td',{text:f(r)}))));
+ add('模型调用次数',r=>String(r.turns));add('工具调用',r=>r.calls.join('、')||'无');add('输入 token',r=>String(r.u.i));add('输出 token',r=>String(r.u.o));add('合计 token',r=>String(r.u.t));
+ out.replaceChildren(el('p',{class:'muted',text:'问题：'+COMPARE_PROMPT+' · 模型：'+($('model').selectedOptions[0]?.text||'')}),table);
+ rows.forEach((r,i)=>{const d=el('div',{class:'bubble'});d.innerHTML=md(r.ans||'（没有回答）');out.append(el('details',{},el('summary',{text:runs[i].label+' 的回答'}),d))});
+ if(rows[0].u.t&&rows[1].u.t){const diff=Math.round((1-rows[1].u.t/rows[0].u.t)*100);out.append(el('p',{class:'msgline '+(diff>0?'ok':''),text:diff>0?'Code Mode 少用 '+diff+'% token。':'这次 Code Mode 没有节省 token，模型多走了步骤。可以再运行一次对比。'}))}}
+$('send').onclick=send;$('prompt').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))send()});
+$('newSession').onclick=()=>{mine=uuid();localStorage.setItem('acloud-session',mine);view(mine)};
+$('backMine').onclick=backMine;
+for(const b of $('tabs').children)b.onclick=()=>tab(b.dataset.p);
+renderSteps();renderReports();refresh();
+</script>
+</body>
+</html>

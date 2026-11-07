@@ -31,6 +31,7 @@
 3. **acloud-agent**：点按钮，填写同一个 `ACLOUD_MCP_TOKEN`，以及 `ACLOUD_SANDBOX_TOKEN`（暂不部署沙箱也可以先填好）。部署会自动创建 R2 存储桶 `acloud-reports`。
 4. **acloud-sandbox（可选）**：点按钮，填写同一个 `ACLOUD_SANDBOX_TOKEN`。首次部署需要构建容器镜像，耗时比其他组件长。没有部署沙箱时，Agent 的「用 Python 复核」会提示不可用，其余功能照常。
 5. **保护演示界面**：acloud-agent 本身没有登录功能。在 Zero Trust → Access controls → Applications 里为 acloud-agent.righttu.uk 添加一个应用，策略只允许演示人员的邮箱。三个组件的 workers.dev 备用地址都已在配置里关闭，只能从 righttu.uk 的域名访问，不能绕过登录。acloud-mcp-s 和 acloud-sandbox 不要对整个域名加 Access，否则 Agent 后台调用会被登录页挡住；它们的数据接口都要密钥。可以只给 acloud-mcp-s 的授权页加 Access：新建 Self-hosted 应用，域名 `acloud-mcp-s.righttu.uk`，路径 `authorize`。
+6. **让浏览器自检能通过 Access**：周报页面也在 Access 后面，Agent 用云端浏览器打开它时需要一张服务令牌。在 Zero Trust → Access controls → Service credentials → Service Tokens 新建一张，在 acloud-agent 的 Access 应用里加一条 Action 为 Service Auth、Include 为这张令牌的策略；再到 Workers & Pages → acloud-agent → Settings → Variables and Secrets 添加两个 Secret：`ACCESS_CLIENT_ID` 和 `ACCESS_CLIENT_SECRET`。不配置时周报照常发布，只是自检会提示被 Access 拦截。
 6. **MCP 门户 acloud-mcp-p（可选）**：步骤见 acloud-mcp-s 目录的说明。这一步只能在控制台完成，需要先在 Zero Trust 里配置身份提供商。
 
 ## 演示主线
@@ -45,8 +46,8 @@
 | 4 断了接着做 | 点「模拟中断」后刷新页面 | 任务从记录接着做，已完成的步骤不重做 |
 | 5 换模型、按技能写 | 切换模型后让 Agent 按技能规范解释发现 | 同一任务换模型运行，写法遵循技能文件 |
 | 6 发布周报并自检 | 发布周报 | 周报保存到 R2，Agent 用浏览器打开并截图自检 |
-| 7 每周自动生成 | 查看报告历史 | 每周一 9:00（北京时间）自动生成的周报出现在历史里，不需要手动操作 |
-| 8 一次查完（Code Mode） | 用 Code Mode 做多步查询 | 一次执行完成多步查询，界面显示 token 用量对比 |
+| 7 每周自动生成 | 点「立即运行一次定时任务」 | 与每周一 9:00（北京时间）定时任务走同一段代码，生成的周报出现在右侧「周报」 |
+| 8 一次查完（Code Mode） | 点「运行对比」 | 同一个问题在关闭、开启 Code Mode 的两个新会话里各跑一次，显示实际 token 用量 |
 | 9 批准后回复 | 批准一份回复草稿 | 人工批准后才调用写入工具，回复标记为模拟发送；AI Gateway 里能看到每次模型调用 |
 
 附加演示（可选）：在 acloud-sandbox.righttu.uk 依次点「分析」「备份工作目录」「销毁并从备份恢复」，说明容器是临时的，结果要存到容器外面。
