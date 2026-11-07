@@ -16,8 +16,20 @@ export class AcloudSandbox extends DurableObject<AcloudEnv> {
     this.queue = task.catch(() => {});
     return task;
   }
+  private stage = '';
   private async perform(action: string, input?: AcloudInput): Promise<unknown> {
+    try { return await this.performInner(action, input); }
+    catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('acloud-sandbox stage failed', this.stage, e);
+      // 把失败阶段和原因带回页面，便于排查；不含密钥。
+      throw new Error(`[${this.stage}] ${msg}`.slice(0, 500));
+    }
+  }
+  private async performInner(action: string, input?: AcloudInput): Promise<unknown> {
+    this.stage = '准备容器';
     const c = this.ctx.container!;
+    if (!c) throw new Error('这个 Durable Object 没有绑定容器');
     const files = new Files(c);
     // 手册 6.5、9.x；https://developers.cloudflare.com/sandbox/reference/directory-backups/
     const backups = new DirectoryBackup(c, this.ctx.exports.DirectoryBackupGateway, { binding: 'BACKUPS', prefix: 'acloud-workspaces/' });
@@ -30,10 +42,13 @@ export class AcloudSandbox extends DurableObject<AcloudEnv> {
     const start = Date.now();
     // 手册 5.5、11：禁止公网出站，SDK 仅为备份对象添加特定内部路由，无 R2 凭据进入容器。
     // https://developers.cloudflare.com/containers/api/durable-object-container/#start
+    this.stage = '启动容器';
     if (!c.running) c.start({ image: c.images['acloud-python'], enableInternet: false });
     await c.setInactivityTimeout(120_000);
+    this.stage = '创建工作目录（等待容器就绪）';
     await files.mkdir('/workspace', { recursive: true });
     if (action === 'restore') {
+      this.stage = '从备份恢复';
       await backups.restore(record!);
       const result = await (await files.readFile('/workspace/work/result.json')).json();
       return { restored: true, backup: record, result, elapsed_ms: Date.now() - start, cold_start: cold };
@@ -41,17 +56,22 @@ export class AcloudSandbox extends DurableObject<AcloudEnv> {
     await files.mkdir('/workspace/work', { recursive: true });
     if (action === 'backup') {
       // 不以冷启动后的空目录覆盖有结果的备份；请先分析或恢复。
+      this.stage = '检查分析结果（请先点「分析」）';
       await files.stat('/workspace/work/result.json');
+      this.stage = '备份到 R2';
       const saved = await backups.backup({ dir: '/workspace/work', name: 'acloud-week-45' });
       await this.ctx.storage.put('backup', saved);
       if (record) await backups.delete(record);
       return { backup: saved };
     }
+    this.stage = '写入工单';
     await files.writeFile('/workspace/work/tickets.json', JSON.stringify(input));
+    this.stage = '运行 Python';
     // 固定 argv，不把工单或请求字段拼成命令。https://developers.cloudflare.com/sandbox/commands/run-python-code/
     const process = await c.exec(['timeout', '--kill-after=5', '30', 'python3', '/opt/acloud/analyze.py']);
     const out = await process.output();
-    if (out.exitCode !== 0) throw new Error('Python 分析失败，退出码 ' + out.exitCode);
+    if (out.exitCode !== 0) throw new Error('Python 分析失败，退出码 ' + out.exitCode + '：' + new TextDecoder().decode(out.stderr).slice(-300));
+    this.stage = '读取结果';
     const result = await (await files.readFile('/workspace/work/result.json')).json<Record<string, unknown>>();
     return { ...result, stdout: new TextDecoder().decode(out.stdout), cold_start: cold, elapsed_ms: Date.now() - start };
   }
@@ -92,8 +112,9 @@ export default {
       const result = await env.SANDBOX.getByName('acloud-demo').run(path === '/backup' ? 'backup' : path === '/restore' ? 'restore' : 'analyze', input);
       return Response.json({ ...(result as object), source }, { headers: { 'Cache-Control': 'no-store' } });
     } catch (e) {
-      console.error('acloud-sandbox operation failed', e instanceof Error ? e.name : 'unknown');
-      return Response.json({ error: '操作失败：请检查工单格式、MCP 配置或容器日志后重试。不会自动降级为示例。' }, { status: 400 });
+      console.error('acloud-sandbox operation failed', e);
+      const detail = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+      return Response.json({ error: '操作失败，不会自动降级为示例。', detail }, { status: 500 });
     }
   }
 } satisfies ExportedHandler<AcloudEnv>;
