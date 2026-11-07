@@ -1,0 +1,29 @@
+{
+  "name": "acloud-mcp-s",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-06",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "workers_dev": true,
+  "routes": [
+    {
+      "pattern": "acloud-mcp-s.righttu.uk",
+      "custom_domain": true
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "TICKETS_DB",
+      "database_name": "acloud-tickets",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "name": "acloud-oauth-kv"
+    }
+  ]
+}
