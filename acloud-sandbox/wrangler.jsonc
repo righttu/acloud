@@ -7,7 +7,7 @@
  "observability": {"enabled": true},
  "vars": {"MCP_URL": ""},
  "r2_buckets": [{"binding": "BACKUPS", "bucket_name": "acloud-sandbox-backups"}],
- "containers": [{"class_name": "AcloudSandbox", "scheduling_policy": "durable_object", "max_instances": 2, "images": {"acloud-python": {"dockerfile": "./Dockerfile"}}}],
+ "containers": [{"class_name": "AcloudSandbox", "scheduling_policy": "durable_object", "images": {"acloud-python": {"dockerfile": "./Dockerfile"}}}],
  "durable_objects": {"bindings": [{"name": "SANDBOX", "class_name": "AcloudSandbox"}]},
  "exports": {"AcloudSandbox": {"type": "durable-object", "storage": "sqlite"}}
 }
