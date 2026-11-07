@@ -6,7 +6,7 @@
 
 ## 部署后需要做的事
 
-1. 账号需要持有 `righttu.uk` 区域；否则先调整自定义域名配置。保留 workers.dev 备用地址；OAuth 的 canonical resource 和 issuer 使用自定义域名，若更换域名也要调整代码中的对应值及 Origin 白名单。
+1. 账号需要持有 `righttu.uk` 区域；否则先调整自定义域名配置。配置里关闭了 workers.dev 地址和版本地址，只能通过自定义域名访问；OAuth 的 canonical resource 和 issuer 使用自定义域名，若更换域名也要调整代码中的对应值及 Origin 白名单。
 2. 按按钮创建 Worker、D1 `acloud-tickets`、KV `acloud-oauth-kv`。资源 ID 留空，由部署流程创建，不填假的 ID。部署命令先发布 Worker（首次部署时自动创建 D1 和 KV），再应用 D1 迁移灌入模拟数据。
 3. 配置密钥 `ACLOUD_MCP_TOKEN`，使用至少32字符随机值；给 acloud-agent 设置同值，不要粘贴进聊天内容。命令行可用 `npx wrangler secret put ACLOUD_MCP_TOKEN`。
 4. 验证根页面和 MCP 客户端连接。OAuth 的角色自选是演示用的，不构成真实身份认证。公开访问者可以选择主管，因此只可存放模拟数据；真实环境须替换为可信 IdP 登录和服务端角色映射。

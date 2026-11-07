@@ -7,7 +7,7 @@
 ## 部署后
 
 1. 用部署界面或 `npx wrangler secret put ACLOUD_SANDBOX_TOKEN` 设置随机长令牌，Agent 端设置同一个密钥。
-2. 自定义域名 `acloud-sandbox.righttu.uk` 需要当前账号管理 righttu.uk；其他账号先移除 routes，使用 workers.dev 备用地址。
+2. 自定义域名 `acloud-sandbox.righttu.uk` 需要当前账号管理 righttu.uk；其他账号先把 routes 改成自己的域名。配置里关闭了 workers.dev 地址和版本地址，必须有自定义域名才能访问。
 3. 可选设置 `MCP_URL=https://acloud-mcp-s.righttu.uk/mcp` 和密钥 `ACLOUD_MCP_TOKEN`。默认留空，使用 12 条少量示例。密钥不传入 Python、不写入 R2、不出现在模型上下文。
 4. 确认 BACKUPS 桶已由部署界面创建。给未完成的 multipart 上传设置 R2 生命周期清理规则。
 5. 打开首页输入沙箱令牌。不要在共享电脑留着页面，演示后刷新。

@@ -6,7 +6,8 @@
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
-  "workers_dev": true,
+  "workers_dev": false,
+  "preview_urls": false,
   "routes": [
     {
       "pattern": "acloud-mcp-s.righttu.uk",
