@@ -1,4 +1,4 @@
-"""手册 5.5：固定程序，不执行工单中的指令。统计截点固定，便于复现。"""
+"""固定程序，不执行工单中的指令。统计截点固定，便于复现。"""
 import json
 from pathlib import Path
 import pandas as pd
@@ -7,7 +7,7 @@ root = Path('/workspace/work')
 data = json.loads((root / 'tickets.json').read_text())
 df = pd.DataFrame(data['tickets'])
 findings = []
-stats = {'week': data['week'], 'total': len(df), 'as_of': '2026-11-09T00:00:00+08:00'}
+stats = {'week': data['week'], 'total': len(df), 'as_of': '2026-11-08T23:59:00+08:00'}
 if not df.empty:
     created = pd.to_datetime(df['created_at'], utc=True)
     local = created.dt.tz_convert('Asia/Shanghai')
