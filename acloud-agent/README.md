@@ -23,7 +23,7 @@
 | 2 分析整周工单 | 模型生成 JS，run_analysis 日志包含代码和结果 |
 | 3 用 Python 复核（可选） | 沙箱得出相同数字；沙箱不可用时返回说明，不阻断对话 |
 | 4 断了接着做 | 点「模拟中断」，对象真实 abort，等约 30 秒刷新，Pi 从 SQLite 检查点恢复 |
-| 5 换模型、按技能写 | 切换 GLM-4.7-Flash / Llama 3.3，构建时打包两份 Markdown 技能 |
+| 5 换模型、按技能写 | 在 DeepSeek V4.1 Flash 与 GLM-4.7-Flash 之间切换，构建时打包两份 Markdown 技能 |
 | 6 发布周报并自检 | R2 HTML，浏览器打开页面并截图，报告及截图地址出现在工具结果 |
 | 7 每周自动生成 | 周一上海 09:00 生成；历史列表 |
 | 8 一次查完（Code Mode） | 开关开启后模型使用 MCP 代码接口，一次执行只返回摘要，对比 token |
@@ -35,7 +35,7 @@
 
 - [Agents / PiHarness](https://developers.cloudflare.com/agents/harnesses/pi/)：agents 0.33.0、Pi 1.5.0 已在 npm 核实。使用 operationId、whenBusy followUp、只读工具 replay:safe。Pi Durable **实验性**，升级应向前修复，避免旧版本无法读取新存储格式。发送工具不注册到模型，模拟中断无需自建记步系统。
 - [Pi AI provider](https://developers.cloudflare.com/agents/models/pi-ai/)：AI绑定、AI Gateway与usage。网关缺失时退回直连；降级提示在当前对象实例有效。
-- [GLM-4.7-Flash](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/)（默认）与 [Llama 3.3 70B](https://developers.cloudflare.com/workers-ai/models/llama-3.3-70b-instruct-fp8-fast/)：官方目录标注支持函数调用，目前没有计划停用日期。模型目录会变化，演示前请核对。
+- [DeepSeek V4.1 Flash](https://developers.cloudflare.com/workers-ai/models/deepseek-v4.1-flash-1017/)（默认，需 Workers 付费计划）与 [GLM-4.7-Flash](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/)：官方目录标注支持函数调用，目前没有计划停用日期。模型目录会变化，演示前请核对。
 - [Dynamic Workers](https://developers.cloudflare.com/dynamic-workers/usage/bindings/)：globalOutbound:null，仅获得主Worker导出的AcloudWeekReader（ctx.exports），只读指定周的工单。没有把密钥、AI、R2绑定传进去。分析结果大小限制不等于防泄漏，模型代码仍可能返回原始数据；演示仅允许合成数据。
 - [Code Mode](https://developers.cloudflare.com/agents/tools/codemode/api-reference/)：@cloudflare/codemode 0.5.6 DynamicWorkerExecutor。**实验性**，只包装固定只读MCP工具，写操作不进入代码接口。
 - [Agents Browser](https://developers.cloudflare.com/agents/tools/browser/) / [Browser Rendering](https://developers.cloudflare.com/browser-run/puppeteer/)：Browser + browserRun，CDP导航、读取正文、截图存R2。限制域名为acloud-agent.righttu.uk；改域名时同步改guardrails和报告URL。浏览器配额不足返回未完成检查，不伪造通过。
