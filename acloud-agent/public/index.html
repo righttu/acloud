@@ -140,18 +140,18 @@ const uuid=()=>crypto.randomUUID();
 let mine=localStorage.getItem('acloud-session');if(!mine||!/^[\w-]{16,80}$/.test(mine)){mine=uuid();localStorage.setItem('acloud-session',mine)}
 let sid=mine,readOnly=false,lastSig='',busy=false,timer=null,models=[];
 const WEEKLY='acloud-weekly-scheduled';
-const COMPARE_PROMPT='查询 1024 号工单和它的客户资料，只返回必要摘要。';
+const COMPARE_PROMPT='查一下 1024 号工单和客户背景，告诉我最需要关注什么。';
 
 const steps=[
- {t:'查一张工单',s:'Agent 通过 MCP 查工单，访问令牌不进入模型',p:'1024 号工单怎么回事',tip:'看右侧「工具调用」：先 catalog 读取参数说明，再用 mcp_read 调用 get_ticket。'},
- {t:'分析整周工单',s:'模型写的代码在无网络的动态 Worker 里运行',p:'分析 2026-W45 全部工单：写 JavaScript 在 run_analysis 里统计总量、各类别数量、逐日登录失败、VIP 超时和同一客户重复投诉，然后写出周报正文（先不发布）。',tip:'右侧会显示模型写的代码和运行结果。200 张工单原文只在隔离环境里处理，不进入对话。'},
- {t:'用 Python 复核',opt:true,s:'容器沙箱用 Python 重算，数字应一致',p:'用 python_review 复核上一步的统计，逐项对比两边的数字是否一致。',tip:'第一次运行要启动容器，约 10 秒。'},
- {t:'断了接着做',s:'对象被中止后，从检查点自动恢复',p:'查询 1074、1091 两张工单和对应的客户资料，写一段跟进说明。',tip:'发送后几秒内点「模拟中断」。会话对象会被真正中止，约 30 秒内自动恢复，已完成的步骤不重做。',extra:'interrupt'},
- {t:'换模型、按技能写',s:'同一会话换成 GLM-4.7-Flash，按技能规范输出',p:'按周报规范，把本会话前面的统计结论整理成三条要点，每条带上具体数字。',tip:'这一步会把顶部模型从 DeepSeek V4.1 Flash 切换为 GLM-4.7-Flash，对话历史保留。技能规范是部署时打包进来的 Markdown 文件。',model:1},
- {t:'发布周报并自检',s:'周报存到 R2，浏览器打开页面截图检查',p:'先用 run_analysis 统计 2026-W45，再按周报规范写成 Markdown，用 publish_report 发布，最后告诉我浏览器自检结果。',tip:'完成后到右侧「周报」查看页面和截图。'},
- {t:'每周自动生成',s:'每周一 09:00（北京时间）定时生成',tip:'定时任务每周一 09:00 自动运行。下面的按钮会立即运行同一段代码，结果出现在右侧「周报」。',extra:'weekly'},
+ {t:'查一张工单',s:'Agent 通过 MCP 查工单，访问令牌不进入模型',p:'1024 号工单怎么回事',tip:'看右侧「工具调用」：查看实际查询了哪些资料和返回结果；需要时展开技术细节。'},
+ {t:'分析整周工单',s:'模型写的代码在无网络的动态 Worker 里运行',p:'帮我分析 2026 年第 45 周的客服情况，重点看看登录问题、VIP 超时和重复投诉，整理成周报，先别发布。',tip:'右侧会显示模型写的代码和运行结果。200 张工单原文只在隔离环境里处理，不进入对话。'},
+ {t:'用 Python 复核',opt:true,s:'容器沙箱用 Python 重算，数字应一致',p:'这些数字准确吗？再用另一种方式核对一下，告诉我哪些一致、哪些还没核对。',tip:'第一次运行要启动容器，约 10 秒。'},
+ {t:'断了接着做',s:'对象被中止后，从检查点自动恢复',p:'看看 1074 和 1091 两张工单，结合客户资料，给我跟进建议。',tip:'发送后几秒内点「模拟中断」。会话对象会被真正中止，约 30 秒内自动恢复，已完成的步骤不重做。',extra:'interrupt'},
+ {t:'换模型、按技能写',s:'同一会话换成 GLM-4.7-Flash，按技能规范输出',p:'把刚才的统计结论压缩成三条要点，保留关键数字。',tip:'这一步会把顶部模型从 DeepSeek V4.1 Flash 切换为 GLM-4.7-Flash，对话历史保留。技能规范是部署时打包进来的 Markdown 文件。',model:1},
+ {t:'发布周报并自检',s:'周报存到 R2，浏览器打开页面截图检查',p:'把这份周报发布成网页，再打开检查一下，给我链接和检查结果。',tip:'完成后到右侧「周报」查看页面和截图。'},
+ {t:'每周自动生成',s:'每周一 09:00（北京时间）定时生成',tip:'每周一 09:00 的任务已由应用预先配置，不是通过聊天创建。下面的按钮立即运行同一段任务，结果出现在右侧「周报」；这不代表已经验证了周一定时触发。',extra:'weekly'},
  {t:'一次查完（Code Mode）',s:'一次执行完成多步查询，对比 token 用量',tip:'用同一个问题分别关闭、开启 Code Mode 各跑一次，比较模型实际返回的 token 用量。',extra:'compare'},
- {t:'批准后回复',s:'人工批准后才写入工单系统',p:'为 1024 号工单写一份给客户的回复草稿，保存后等待人工批准。',tip:'草稿出现在右侧「草稿审批」。填写批准人后点「批准发送」才会调用写入工具。每次模型调用都记录在 AI Gateway 日志里。'}
+ {t:'批准后回复',s:'人工批准后才写入工单系统',p:'帮我给 1024 号工单写一条客户回复，先给我审核，不要发送。',tip:'草稿出现在右侧「草稿审批」。填写批准人后点「批准发送」才会调用写入工具。每次模型调用都记录在 AI Gateway 日志里。'}
 ];
 let current=-1;
 function renderSteps(){const box=$('steps');box.replaceChildren();steps.forEach((s,i)=>{box.append(el('div',{class:'step'+(i===current?' active':''),onclick:()=>pick(i)},el('div',{class:'num',text:String(i+1)}),el('div',{},el('b',{},s.t,s.opt?el('span',{class:'tag',text:'可选'}):null),el('span',{text:s.s}))))})}
