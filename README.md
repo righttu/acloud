@@ -30,7 +30,7 @@
 2. **AI Gateway**：在 Cloudflare 控制台进入 AI → AI Gateway，点「创建网关」，名称填 `acloud-gateway`。acloud-agent 调用模型时会经过它，用来演示调用记录和模型切换。
 3. **acloud-agent**：点按钮，填写同一个 `ACLOUD_MCP_TOKEN`，以及 `ACLOUD_SANDBOX_TOKEN`（暂不部署沙箱也可以先填好）。部署会自动创建 R2 存储桶 `acloud-reports`。
 4. **acloud-sandbox（可选）**：点按钮，填写同一个 `ACLOUD_SANDBOX_TOKEN`。首次部署需要构建容器镜像，耗时比其他组件长。没有部署沙箱时，Agent 的「用 Python 复核」会提示不可用，其余功能照常。
-5. **保护演示界面**：acloud-agent 本身没有登录功能。在 Zero Trust → Access controls → Applications 里为 acloud-agent.righttu.uk 添加一个应用，策略只允许演示人员的邮箱。
+5. **保护演示界面**：acloud-agent 本身没有登录功能。在 Zero Trust → Access controls → Applications 里为 acloud-agent.righttu.uk 添加一个应用，策略只允许演示人员的邮箱。acloud-agent 的 workers.dev 备用地址已在配置里关闭，不能绕过登录。acloud-mcp-s 和 acloud-sandbox 不要对整个域名加 Access，否则 Agent 后台调用会被登录页挡住；它们的数据接口都要密钥。可以只给 acloud-mcp-s 的授权页加 Access：新建 Self-hosted 应用，域名 `acloud-mcp-s.righttu.uk`，路径 `authorize`。
 6. **MCP 门户 acloud-mcp-p（可选）**：步骤见 acloud-mcp-s 目录的说明。这一步只能在控制台完成，需要先在 Zero Trust 里配置身份提供商。
 
 ## 演示主线

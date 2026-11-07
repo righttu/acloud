@@ -6,7 +6,7 @@
 
 ## 部署后
 
-1. 在有 righttu.uk 的账号点击部署，或 `npm install && npm run deploy`。其他账号先调整 routes，保留 workers.dev 备用地址。需要开通 Workers AI、R2、Browser Run 和 Dynamic Workers 权限/付费计划。
+1. 在有 righttu.uk 的账号点击部署，或 `npm install && npm run deploy`。其他账号先把 routes 改成自己的域名。为了不让人绕过 Access 登录，配置里关闭了 workers.dev 地址和版本地址，必须有自定义域名才能访问。需要开通 Workers AI、R2、Browser Run 和 Dynamic Workers 权限/付费计划。
 2. `wrangler secret put ACLOUD_MCP_TOKEN`，填入 acloud-mcp-s 相同的机器令牌。可选设置 ACLOUD_SANDBOX_TOKEN。示例见 `.dev.vars.example`，不提交真实密钥。
 3. 控制台创建 AI Gateway `acloud-gateway`，或调整 AI_GATEWAY_ID。网关调用失败会再尝试 Workers AI 直连，界面显示降级；此策略不是跨供应商模型容灾。
 4. 分别部署 acloud-mcp-s 和可选的 acloud-sandbox，检查 MCP_URL、SANDBOX_URL。此 Worker 不会替你部署其他目录。

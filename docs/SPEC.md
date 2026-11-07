@@ -27,7 +27,7 @@
 - 自动创建的资源：KV、D1、R2、Durable Objects、Workers AI、Queues 等。wrangler 配置里要给每个绑定写好默认名字。
 - 密钥用 `.dev.vars.example` 声明；在 package.json 的 `cloudflare.bindings` 里给每个密钥和变量写中文说明。
 - D1 迁移放在 `deploy` 脚本里：`wrangler deploy && wrangler d1 migrations apply TICKETS_DB --remote`（先发布，首次部署时自动创建 D1；迁移命令用绑定名）。
-- 自定义域名写在 wrangler 配置：`"routes": [{ "pattern": "acloud-xxx.righttu.uk", "custom_domain": true }]`，部署时自动创建 DNS 记录。前提是部署账号里有 righttu.uk。同时保留 `workers_dev: true` 作为备用地址。
+- 自定义域名写在 wrangler 配置：`"routes": [{ "pattern": "acloud-xxx.righttu.uk", "custom_domain": true }]`，部署时自动创建 DNS 记录。前提是部署账号里有 righttu.uk。acloud-mcp-s 和 acloud-sandbox 保留 `workers_dev: true` 作为备用地址（数据接口都要密钥）；acloud-agent 设为 `workers_dev: false`、`preview_urls: false`，只能通过受 Access 保护的自定义域名访问。
 - `compatibility_date` 用 `2026-11-06`，按需加 `nodejs_compat`。
 
 ## 3. 子项目之间的约定

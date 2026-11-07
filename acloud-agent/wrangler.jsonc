@@ -5,7 +5,9 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "workers_dev": true,
+  // 只通过 acloud-agent.righttu.uk 访问，由 Cloudflare Access 保护；关闭 workers.dev 和版本地址，避免绕过登录。
+  "workers_dev": false,
+  "preview_urls": false,
   "routes": [
     {
       "pattern": "acloud-agent.righttu.uk",
